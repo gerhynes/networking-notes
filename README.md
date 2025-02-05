@@ -427,7 +427,84 @@ DNS starts with the DNS Root, hosted on the DNS name servers. The DNS root zone 
 
 There are 13 root server IP addresses which host the root zone. These are distributed geographically and the hardware is managed by independent organizations. 
 
-The root zone only stores high level information on the Top Level Domains (TLDs) of DNS. TLDs can be generic `.com` or country-code specific, `.uk`, `.au`. IANA delegates the management of these TLDs to other organizations known as registries. The job of the root zone is to point to these TLD registries.
+The root zone only stores high level information on the Top Level Domains (TLDs) of DNS. TLDs can be generic `.com` or country-code specific, `.uk`, `.au`. IANA delegates the management of these TLDs to other organizations known as registries. The job of the root zone is to point to these TLD registries. 
+
+The TLD servers point to authoritative name servers, which host one or more zones for a domain, such as `netflix.com` or `bsky.app`. So the `netflix.com` entry in the TLD points to the Netflix name servers. The name servers host the zone for a given domain. This means they host the ZoneFile which contains the data for that zone. These zones and ZoneFiles are also authoritative for that domain.
+
+#### Registering a New Domain
+A Domain Registrar (Route53 or Hover) has one function, to let you purchase domains. To allow this, they have a relationship with the TLD Registry for many top level domains.
+
+A DNS Hosting Provider operates DNS name servers, which can host DNS zones. They allow you to manage the content of those zones. 
+
+Registrars and hosting providers can be the same or different companies. 
+
+1. customer pays for available `.com` domain
+2. registrar either creates a zone or requests a zone be created by a hosting provider
+3. registrar supplies name servers info to TLD registry
+4. TLD registry adds domain name servers to the `.com` TLD zone
+
+#### DNSSEC
+DNSSEC strengthens authentication in DNS using digital signatures based on public key cryptography. With DNSSEC, it's not DNS queries and responses themselves that are cryptographically signed, but rather DNS data itself is signed by the owner of the data.
+
+DNSSEC provides improvements over DNS
+- Data origin authentication - this data comes from this zone
+- Data integrity protection - this data hasn't been modified in transit
+- establishes chain of trust between root zone and records
+
+DNSSEC is additive, it doesn't replace DNS. A DNSSEC-capable device will get back DNS results and DNSSEC results. With DNSSEC, invalid records will be easily identifiable.
+
+Within a Zone, such as `icann.org`, there are resource records (cname, A, AAAA, MX) grouped into resource record sets for easier management. An RRSET is a set of all records with the same name and the same type.
+
+Individual resource records are not validated by DNSSEC, RRSETs are. RRSIG stores a digital signature of an RRSET using public and private pairs of keys. This key pair is known as the Zone Signing Key (ZSK). An external process uses the private part of the ZSK to create a signature which can be stored alongside the plaintext RRSET in the zone using the same name, labelled as RRSIG.
+
+If the RRSET changes, the RRSIG has to be regenerated. Any unauthorized changes result in an invalid signature. The private ZSK is needed for generation.
+
+You need the public part of the ZSK to verify RRSIGs created using the private part. The DNSKEY contains the public key to verify all RRSIGs in the zone. The DNS resolver can take the RRSET, and with the matching RRSIG and the DNSKEY record, can verify that both the RRSIG matches the RRSET and that the signature was generated using the private part of the ZSK. This assumes you trust the DNSKEY, that is that only the zone admin has the private signing key. 
+
+The zone is linked cryptographically to the parent zone. The private Key Signing Key (KSK) creates an RRSIG from the DNSKEY. Changing the ZSK requires regenerating the RRSIG records, updating the DNSKEY RecordSet, and then regenerating the RRSIG of the DNSKEY RecordSet using the private KSK. All of this occurs inside the zone only.
+
+We can validate the KSK because it's referenced from the parent zone. The DNSKEY (KSK) is the point of trust for the zone. The parent zone links to the KSK, so we can change the ZSK as required without impacting the parent zone.
+
+##### DNSSEC Chain of Trust
+A parent zone needs to explicitly say it trusts its child zone and this is done using a Delegated Signer Record Set. This stores a hash of the child domain's public Key Signing Key. Since the hash is one way and unique, adding this record shows the parent zone trusts the child zone's KSK. 
+
+There is a matching RRSIG, a matching digital signature of the DS RRSET made using the parent zone's private ZSK. RRSIGs in the parent zone are validated using its DNSKEY (public ZSK and public KSK). This DNSKEY needs a matching RRSIG created by signing the DNSKEY RRSET with the parent zone's public KSK.
+
+The root zone's private Key Signing Key is explicitly trusted, it's sometimes called the trust anchor. In two secure locations (California and Virginia) are what are essentially the keys to the internet. The private DNS Root Key Signing Key. They rarely change, and the trust in them is hard-coded into all DNSSEC clients. They are locked away, protected and never exposed. They use redundant hardware security modules, also redundant across physical locations.
+
+The public part of the DNS Root Key Signing Key is part of the DNSKEY RecordSet within the Root zone, along with the public Zone Signing Key. The Root zone Zone Signing Key is signed with the private Root zone KSK producing as an output the Root zone RRSIG DNSKEY.
+
+The signing ceremony involves a Ceremony Administrator and at least 3 Crypto Officers, using the hardware security modules and a stateless ceremony laptop.
+
+### Kubernetes
+Kubernetes (K8s) is an open-source system for automating deployment, scaling, and management of containerized applications.
+
+- Cluster - a deployment of K8s, for management, orchestration
+- Node - resources, pods are placed on nodes to run
+- Pod - 1 or more containers, smallest unit in K8s, often 1 container 1 pod
+- Service - abstraction, service running on one or more pods
+- Job - ad-hoc, creates one or more pods until completion
+- Ingress - exposes a way into a service. (ingress -> routing -> service -> 1+ pods)
+- Ingress Controller - used to provide ingress (such as nginx or AWS LB controller using ALB/NLB)
+- Persistent Storage (PV) - volume whose lifecycle lives beyond any one pod using it
+
+A K8s cluster is a highly-available cluster of compute resources organized to work as one unit. The cluster Control Plane manages the cluster, scheduling applications, scaling and deploying. Cluster Nodes are virtual machines or physical servers which function as workers in a cluster. On each node, containerd, Docker or another container runtime handles container operations. Kubelet is an agent to interact with the cluster control plane. The Kubernetes API is used for communication between the control plane and kubelet agents.
+
+Pods are the smallest units of computing in Kubernetes. They have shared storage and networking. It's common to see a one container - one pod architecture. The pods handle the containers within them. Pods are non-permanent. They are created, do a job, and are disposed of. Pods can be deleted when finished, evicted for lack of resources, or if the node itself fails.
+
+kube-apiserver is the frontend for the Kubernetes control plane. It's what nodes and other cluster elements interact with. It can be horizontally scaled for high availability and performance. etcd provides a highly-available key-value store used as the main backing store within the cluster.
+
+kube-scheduler identifies any pods within the cluster with no assigned nodes and assigns a node based on resource requirements, deadlines, affinity/anti-affinity, data locality, or other constraints. The cloud-controller-manager provides cloud-specific control logic. It allows you to link K8s with a cloud provider's APIs.
+
+kube-controller-manager is a collection of processes. Node controller monitors and responds to node outages. Job controller runs pods to execute one off tasks. Endpoint controller populates endpoints, linking services to pods. Service Account and Token controller handles account and API token creation.
+
+kube-proxy is a network proxy running on each node. It coordinates networking with the control plane. It helps implement services and configure rules allowing communication with pods from inside or outside the cluster.
+
+It's best to architect things in K8s to be stateless from a pod's perspective since pod are temporary.
+
+### Backups and Data Recovery
+
+
 
 
 
