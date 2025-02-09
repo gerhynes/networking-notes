@@ -429,8 +429,15 @@ There are 13 root server IP addresses which host the root zone. These are distri
 
 The root zone only stores high level information on the Top Level Domains (TLDs) of DNS. TLDs can be generic `.com` or country-code specific, `.uk`, `.au`. IANA delegates the management of these TLDs to other organizations known as registries. The job of the root zone is to point to these TLD registries. 
 
-The TLD servers point to authoritative name servers, which host one or more zones for a domain, such as `netflix.com` or `bsky.app`. So the `netflix.com` entry in the TLD points to the Netflix name servers. The name servers host the zone for a given domain. This means they host the ZoneFile which contains the data for that zone. These zones and ZoneFiles are also authoritative for that domain.
+The TLD servers point to authoritative name servers, which host one or more zones for a domain, such as `netflix.com` or `bsky.app`. So the `netflix.com` entry in the TLD points to the Netflix name servers. The name servers host the zone for a given domain. This means they host the ZoneFile which contains the data for that zone. These zones and ZoneFiles are also authoritative for that domain.#
+#### Walking the Tree
+The job of DNS is to help you locate and get a query response from the authoritative zone which hosts the DNS records you need.
 
+If you perform a DNS query for `www.netflix.com`, the first thing to be checked will be the local cache and Hosts file. If the local client doesn't know the DNS name you're querying, a DNS resolver is checked next. A Resolver is a type of DNS server often running on a home router or within an IP provider and will make the query on your behalf. The Resolver checks its own local cache and might be able to return an non-authoritative answer.
+
+The Resolver queries the root zone, which contains name server records for the `.com` TLD. The Resolver can now query one of the `.com` name servers. The `.com` name servers can direct the Resolver to the `netflix.com` name servers. The Resolver queries the `netflix.com` name servers, they return a DNS record to the Resolver, which caches the result to improve future performance.
+
+No one name server has all the answers but every query moves you to the next step.
 #### Registering a New Domain
 A Domain Registrar (Route53 or Hover) has one function, to let you purchase domains. To allow this, they have a relationship with the TLD Registry for many top level domains.
 
@@ -476,6 +483,50 @@ The public part of the DNS Root Key Signing Key is part of the DNSKEY RecordSet 
 
 The signing ceremony involves a Ceremony Administrator and at least 3 Crypto Officers, using the hardware security modules and a stateless ceremony laptop.
 
+### Cloud Computing
+Cloud computing is a model for enabling ubiquitous, convenient, on-demand network access to a shared pool of configurable computing resources (networks, servers, storage, applications, and services) that can be rapidly provisioned and released with minimal management effort or service provider interaction.
+
+NIST (National Institute of Standards and Technology) defines 5 essential characteristics of cloud computing:
+
+1. **On-demand Self Service** - you can provision capabilities as needed **without requiring human interaction**
+2. **Broad Network Access** - capabilities are available over the **network** and accessed through **standard mechanisms**
+3. **Resource Pooling** - There is a sense of location independence, with no control or knowledge over the exact location of the resources. The resources are pooled to serve multiple consumers using a multi-tenant model.
+4. **Rapid Elasticity** - capabilities can be elastically provisioned and released to scale rapidly outwards and inwards with demand. To the consumer, the capabilities available for provisioning often appear to be unlimited.
+5. **Measured Service** - resource usage can be monitored, controlled, reported, and billed.
+
+#### Public vs Private vs Multi vs Hybrid Cloud
+Public cloud, simply put, is a cloud environment that is available to the general public.
+
+Multi-cloud is using multiple public cloud platforms in a single system, perhaps to achieve high availability.
+
+Private cloud is a solution dedicated to your business and run from your business premises (such as AWS Outputs). It still needs to meet the 5 characteristics of cloud computing.
+
+Hybrid cloud is the use of private cloud in conjunction with public cloud collaborating as a single environment. It is not connecting a public cloud to your legacy on-premises network (this could be called hybrid environment).
+
+#### Cloud Service Models
+When you deploy an application anywhere, it uses an infrastructure stack, a collection of things that application needs which build on top of each other.
+- application
+- data
+- runtime
+- container
+- OS
+- virtualization
+- servers
+- infrastructure
+- facilities
+
+There are parts you manage and parts that are managed by a vendor. You consume and pay for a unit of consumption, the part of the system from which point upwards you are responsible for managing. If you procure a virtual server, then your unit of consumption is the virtual machine.
+
+With an on-premises system, your business has to buy and manage all parts of the stack, as well as the staff costs and risks. This is expensive and has some risks but is very flexible.
+
+Data centre hosting (which was more popular before cloud computing) means that you buy infrastructure and use a facility (data centre) owned by someone else.  
+
+Infrastructure as a service (IaaS) means that the provider manages the facilities, storage, networking, physical server and virtualization. You consume the OS and manage it and anything above the OS. You usually pay per second/minute/hour for the virtual machine. EC2 would be an example of IaaS.
+
+Platform as a Service (PaaS) is aimed at developers who have an application they want to run without being concerned about the infrastructure. Your unit of consumption is the runtime environment.
+
+Software as a Service (SaaS) is when you consume the application. You have no exposure to anything else in the stack. For example, Dropbox, Gmail, Office 365.
+
 ### Kubernetes
 Kubernetes (K8s) is an open-source system for automating deployment, scaling, and management of containerized applications.
 
@@ -503,6 +554,48 @@ kube-proxy is a network proxy running on each node. It coordinates networking wi
 It's best to architect things in K8s to be stateless from a pod's perspective since pod are temporary.
 
 ### Backups and Data Recovery
+#### Recovery Point Objective (RPO) and Recovery Time Objective (RTO)
+Recovery Point Objective (RPO) and Recovery Time Objective (RTO) are two key metrics used in business continuity and disaster recovery planning. 
+
+RPO refers to the amount of data that can be lost, or the maximum allowable age of the last backup, in the event of a disaster or outage. 
+
+RTO, on the other hand, refers to the maximum tolerable duration of a service outage, or the time it takes to restore services to normal after a disaster or outage.
+
+RPO and RTO are both critical in determining the appropriate backup and recovery strategy for an organization, as well as for ensuring that the organization can quickly recover from disaster or outage and resume normal business operations.
+
+A successful backup is a Recovery Point. The maximum data loss is the maximum time between two successful backups. Lower RPO means more frequent backups, which means more cost. Make sure backups occur as or more frequently that the desired RPO. A failed backup can double data loss.
+
+Recovery time of a system begins at the moment of the failure, and ends when the system is operational and handed back to the business. You can only start to recover when you're made aware that the system has failed. Is there monitoring? Is it reliable? How will staff be notified? 
+
+Other questions include: Is the restoration process documented? Is the necessary person available? What are you restoring on? Do you need a secondary site because not just is the server on fire but the entire server room? 
+
+Before final handover to the customer, business testing and user testing is necessary. Different business and systems will have different RPO and RTOs. RPO and RTO can be reduced via planning, monitoring, notifications, processes, spare hardware, training, and more efficient systems.
+
+### Configuration Formats
+#### YAML
+YAML (YAML Ain't Markup Language) is a lightweight, human-readable data serialization format that is often used for configuration files and data exchange between applications. YAML supports complex data structures, including lists, dictionaries and nested structures, and can be used with a wide range of programming languages and tools.
+
+A YAML document is an unordered collection of key-value pairs, separated by a colon. YAML supports strings, integers, floats, booleans, null and lists.
+
+```YAML
+cats: ["truffles", "penny", "winkie"]
+alsocats:
+ - "truffles"
+ - "penny"
+ - winkie
+```
+
+String values can be enclosed in quotes or not. Enclosing can be more precise.
+
+Using YAML's support for key-value pairs, lists and dictionaries allows you to build complex data structures in a human-readable way.
+
+#### JSON
+JSON (JavaScript Object Notation) is a lightweight data interchange format that is commonly used for data exchange between applications. Indentation isn't important because everything is enclosed in quotes or brackets. JSON supports strings, numbers, objects, arrays, booleans, and null.
+
+Every JSON document is a collection of unordered key-value pairs, where the value is a JSON object.
+
+
+
 
 
 
